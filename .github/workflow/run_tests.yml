@@ -1,0 +1,51 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  run_tests:
+    runs-on: ubuntu-latest
+
+    env:
+      MIX_ENV: test
+
+    strategy:
+      matrix:
+        elixir: [1.13.2]
+        otp: [24.0.5]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+        
+      - name: Retrieve Mix Dependencies Cache
+        uses: actions/cache@v1
+        id: deps-cache
+        with:
+          path: deps
+          key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-deps-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      
+      - name: Retrieve Build Cache
+        uses: actions/cache@v1
+        id: build-cache
+        with:
+          path: _build
+          key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-build-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+
+      - name: Install Mix Dependencies
+        run: |
+          mix local.rebar --force
+          mix local.hex --force
+      - run: mix do deps.get, compile
+      - run: mix format --check-formatted
+      - run: mix test
+      - run: mix credo --strict --all
